@@ -1,230 +1,205 @@
 <script>
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabase';
+  import { goto } from '$app/navigation';
+  import * as XLSX from 'xlsx';
 
-  let siswa = [];
-  let pembayaran = [];
-  let jumlah = {};
 
-  // load data
-  const loadData = async () => {
-    const { data: s, error: e1 } = await supabase.from('siswa').select('*');
-    const { data: p, error: e2 } = await supabase.from('pembayaran').select('*');
+  let siswa = $state([]);
+  let pembayaran = $state([]);
 
-    console.log('SISWA:', s, e1);
-    console.log('PEMBAYARAN:', p, e2);
+  let nama = '';
+  let passwordSiswa = '';
 
-    siswa = s || [];
-    pembayaran = p || [];
-  };
+  let openSiswa = $state(false);
+  let kelasAktif = $state(1);
+  let noAbsen = '';
+
+  let role = $state(null);
+
+  onMount(() => {
+    role = localStorage.getItem('role');
+
+    if (!role) {
+      goto('/login');
+    }
+
+    loadData();
+  });
+
+  const siswaKelas = () =>
+  siswa
+    .filter(s => Number(s.kelas) === Number(kelasAktif))
+    .sort((a, b) => a.nama.localeCompare(b.nama));
+  
 
   onMount(loadData);
 
-  // hitung total
-  const getTotal = (id) => {
-    return pembayaran
-      .filter(p => p.siswa_id === id)
-      .reduce((acc, curr) => acc + (curr.jumlah || 0), 0);
-  };
+  async function loadData() {
+  const { data: s } = await supabase.from('siswa').select('*');
+  const { data: p } = await supabase.from('pembayaran').select('*');
 
-  const getStatus = (total) => {
-    return total >= 30000 ? 'Lunas' : 'Belum';
-  };
+  siswa = [...(s || [])];
+  pembayaran = [...(p || [])];
+}
 
-  // input pembayaran
-  const bayar = async (siswa_id) => {
-    if (!jumlah[siswa_id]) return;
+  const tambahSiswa = async () => {
+  if (!nama || !noAbsen) {
+    alert('Nama & No Absen wajib');
+    return;
+  }
 
-    const { error } = await supabase
-      .from('pembayaran')
-      .insert({
-        siswa_id,
-        jumlah: parseInt(jumlah[siswa_id]),
-        tanggal: new Date()
-      });
-
-    if (error) {
-      console.error(error);
-      alert('Gagal simpan!');
-      return;
-    }
-
-    jumlah[siswa_id] = '';
-    loadData();
-  };
-
-  // Tambah siswa
-    let nama = '';
-    let kelas = '';
-
-    const tambahSiswa = async () => {
-    if (!nama || !kelas) return;
-
-    const { error } = await supabase.from('siswa').insert({
+  const { error } = await supabase.from('siswa').insert({
     nama,
-    kelas
-});
+    kelas: kelasAktif,
+    password: passwordSiswa,
+    no_absen: parseInt(noAbsen)
+  });
 
   if (error) {
-    alert('Gagal tambah siswa');
+    alert(error.message);
     return;
   }
 
   nama = '';
-  kelas = '';
-  loadData();
-};
-    // Riwayat bayar
-    let selected = null;
-    let history = [];
+  passwordSiswa = '';
+  noAbsen = '';
 
-    const lihatDetail = async (id) => {
-    selected = id;
-
-    const { data } = await supabase
-        .from('pembayaran')
-        .select('*')
-        .eq('siswa_id', id);
-
-    history = data || [];
-};
-    // Bulan
-    const bulanList = [
-  'Jan','Feb','Mar','Apr','Mei','Jun',
-  'Jul','Agu','Sep','Okt','Nov','Des'];
-
-    // Cari siswa
-    let search = '';
-
-    const filtered = $derived(
-  siswa.filter(s =>
-    s.nama.toLowerCase().includes(search.toLowerCase())
-  )
-);
-    // Login
-    let user = null;
-
-    const checkUser = async () => {
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
+  await loadData();
 };
 
-onMount(() => {
-  checkUser();
-  loadData();
-});
+  const siswaTampil = () => {
+  if (role === 'siswa') {
+    const id = localStorage.getItem('siswa_id');
+    return siswa.filter(s => s.id === id);
+  }
+  return siswaKelas();
+};
+
+  function totalSiswa(id) {
+    return pembayaran
+      .filter(p => p.siswa_id === id)
+      .reduce((a,b)=>a+(b.jumlah||0),0);
+  }
+
+  function status(total) {
+    return total >= 30000 ? 'Lunas' : 'Belum';
+  }
+
+  async function logout() {
+  await supabase.auth.signOut();
+  localStorage.clear();
+  goto('/login');
+}
+
+async function exportExcel(kelas) {
+  // 🔥 ambil siswa
+  const { data: siswa } = await supabase
+    .from('siswa')
+    .select('*')
+    .eq('kelas', kelas);
+
+  // 🔥 ambil pembayaran
+  const { data: pembayaran } = await supabase
+    .from('pembayaran')
+    .select('*');
+
+  // bulan list
+  const bulanList = [
+    'Jan','Feb','Mar','Apr','Mei','Jun',
+    'Jul','Agu','Sep','Okt','Nov','Des'
+  ];
+
+  // 🔥 mapping data
+  const result = siswa.map(s => {
+    let row = {
+      Nama: s.nama,
+      "No Absen": s.no_absen
+    };
+
+    bulanList.forEach(bulan => {
+      const total = pembayaran
+        .filter(p =>
+          p.siswa_id === s.id &&
+          p.bulan.toLowerCase() === bulan.toLowerCase()
+        )
+        .reduce((a, b) => a + (b.jumlah || 0), 0);
+
+      row[bulan] = total;
+    });
+
+    return row;
+  });
+
+  // 🔥 convert ke excel
+  const ws = XLSX.utils.json_to_sheet(result);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `Kelas ${kelas}`);
+
+  XLSX.writeFile(wb, `SPP_Kelas_${kelas}.xlsx`);
+}
 </script>
 
 <div class="app">
-  <!-- SIDEBAR -->
+
   <aside class="sidebar">
     <h2>SPP App</h2>
-    <ul>
-      <li class="active">Dashboard</li>
-      <li>Siswa</li>
-      <li>Pembayaran</li>
-    </ul>
+
+      <ul>
+        <li on:click={() => openSiswa = !openSiswa}>
+          Siswa {openSiswa ? '▼' : '▶'}
+        </li>
+
+        {#if openSiswa}
+          <ul class="submenu">
+            {#each [1,2,3,4,5,6] as k}
+              <li on:click={() => kelasAktif = k}>
+                Kelas {k}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </ul>
+
+      <button class="logout" on:click={logout}>
+  Logout
+</button>
   </aside>
 
-  <!-- MAIN -->
   <main class="main">
-  {#if !user}
-  <div class="login">
-    <h2>Login</h2>
-    <input placeholder="Email" bind:value={email} />
-    <input type="password" placeholder="Password" bind:value={password} />
-    <button on:click={login}>Login</button>
-  </div>
-  {/if}
-    <!-- NAVBAR -->
-    <div class="navbar">
-      <h1>Dashboard SPP</h1>
-    </div>
-
-    <!-- CARD STATS -->
-    <div class="stats">
-      <div class="card-stat">
-        <p>Total Siswa</p>
-        <h2>{siswa.length}</h2>
+    <h1>Kelas {kelasAktif}</h1>
+    {#if role === 'guru'}
+      <div class="form">
+        <input placeholder="Nama" bind:value={nama} />
+        <input placeholder="Password" bind:value={passwordSiswa} />
+        <input placeholder="No Absen" type="number" bind:value={noAbsen} />
+        <button on:click={tambahSiswa}>Tambah</button>
+        <button on:click={() => exportExcel(1)}>
+          Export Excel
+        </button>
       </div>
+    {/if}
 
-      <div class="card-stat">
-        <p>Total Pembayaran</p>
-        <h2>
-          Rp {pembayaran.reduce((a,b)=>a+(b.jumlah||0),0)}
-        </h2>
-      </div>
-    </div>
-
-    <!-- FORM -->
-    <div class="form">
-      <input placeholder="Nama" bind:value={nama} />
-      <input placeholder="Kelas" bind:value={kelas} />
-      <button on:click={tambahSiswa}>Tambah</button>
-
-      <input
-        class="search"
-        placeholder="Cari siswa..."
-        bind:value={search}
-      />
-    </div>
-
-    <!-- TABLE -->
     <div class="table-card">
       <table>
         <thead>
           <tr>
             <th>Nama</th>
-            <th>Kelas</th>
-            <th>Total</th>
-            <th>Status</th>
-            <th>Bayar</th>
-            <th>Detail</th>
+            <th>No Absen</th>
           </tr>
         </thead>
 
         <tbody>
-          {#each filtered as s}
-            {@const total = getTotal(s.id)}
-            <tr class={getStatus(total) === 'Belum' ? 'warning' : ''}>
-              <td>{s.nama}</td>
-              <td>{s.kelas}</td>
-              <td>Rp {total}</td>
-
+          {#each siswaKelas() as s}
+            <tr>
               <td>
-                <span class="status {getStatus(total) === 'Lunas' ? 'lunas' : 'belum'}">
-                  {getStatus(total)}
-                </span>
+                <a href={`/siswa/${s.id}`}>{s.nama}</a>
               </td>
-
-              <td>
-                <input
-                  type="number"
-                  value={jumlah[s.id] || ''}
-                  on:input={(e) => jumlah[s.id] = e.target.value}
-                />
-                <button on:click={() => bayar(s.id)}>✔</button>
-              </td>
-
-              <td>
-                <button on:click={() => lihatDetail(s.id)}>👁</button>
-              </td>
+              <td>{s.no_absen}</td>
             </tr>
           {/each}
         </tbody>
       </table>
     </div>
-
-    <!-- DETAIL -->
-    {#if selected}
-      <div class="detail">
-        <h3>Riwayat Pembayaran</h3>
-        <ul>
-          {#each history as h}
-            <li>{h.tanggal} - Rp {h.jumlah}</li>
-          {/each}
-        </ul>
-      </div>
-    {/if}
   </main>
 </div>
