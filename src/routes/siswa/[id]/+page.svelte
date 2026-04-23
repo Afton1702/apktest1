@@ -135,6 +135,10 @@
   {#each bulanList as b}
     <div class={`bulan-card ${isLunas(b) ? 'lunas' : ''}`}>
 
+  {#if isLunas(b)}
+    <div class="lunas-label">LUNAS</div>
+  {/if}
+
       <h2>{b}</h2>
       <p>Total: Rp {totalBulanan(b)}</p>
 
@@ -164,6 +168,9 @@
 </div>
 
 <style>
+body {
+  padding: 10px;
+}
 /* ===== HEADER ===== */
 .judul {
   font-size: 34px;
@@ -192,13 +199,13 @@
 /* ===== CARD ===== */
 .bulan-card {
   background: #f8fafc;
-  padding: 20px;
+  padding: 16px;
   border-radius: 16px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
   transition: 0.2s;
-
-  overflow: visible; /* ✅ penting */
-  height: auto;      /* ✅ biar ngikut isi */
+  position: relative;
+  overflow: visible; 
+  height: auto;      
 }
 
 .bulan-card:hover {
@@ -209,6 +216,57 @@
 .bulan-card.lunas {
   border: 2px solid #22c55e;
   background: #f0fdf4;
+  animation: glow 1s ease;
+}
+
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 0 rgba(34,197,94,0);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(34,197,94,0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(34,197,94,0);
+  }
+}
+
+.bulan-card.lunas:hover {
+  transform: scale(1.02);
+  transition: 0.2s;
+}
+
+.lunas-label {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+
+  background: #22c55e;
+  color: white;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  padding: 6px 12px;
+  border-radius: 999px;
+
+  animation: popIn 0.4s ease;
+  box-shadow: 0 0 0 rgba(34,197,94,0.6);
+}
+
+/* animasi masuk */
+@keyframes popIn {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* ===== JUDUL BULAN ===== */
@@ -255,11 +313,7 @@
   grid-template-columns: repeat(6, 1fr);
   gap: 10px;
   margin-top: 15px;
-
-  /* ❌ HAPUS min-height */
-  /* min-height: 220px; */
-
-  grid-auto-rows: 1fr; /* ✅ biar rapi */
+  grid-auto-rows: 1fr; 
 }
 
 /* ===== BOX ===== */
@@ -287,12 +341,25 @@
 
 /* ===== MOBILE ===== */
 @media (max-width: 600px) {
+  .bulan-wrapper {
+    grid-template-columns: 1fr; /* 1 kolom aja */
+  }
+
+  .bulan-card {
+    padding: 14px;
+  }
+
   .grid {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr); /* dari 6 jadi 4 */
+    gap: 8px;
+  }
+
+  .box {
+    font-size: 11px;
   }
 
   .judul {
-    font-size: 26px;
+    font-size: 24px;
   }
 }
 </style>
