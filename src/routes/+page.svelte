@@ -93,13 +93,14 @@
 }
 
 async function exportExcel(kelas) {
-  // 🔥 ambil siswa
+  //  ambil siswa
   const { data: siswa } = await supabase
     .from('siswa')
     .select('*')
-    .eq('kelas', kelas);
+    .eq('kelas', kelas)
+    .order('no_absen', { ascending: true });
 
-  // 🔥 ambil pembayaran
+  //  ambil pembayaran
   const { data: pembayaran } = await supabase
     .from('pembayaran')
     .select('*');
@@ -110,7 +111,7 @@ async function exportExcel(kelas) {
     'Jul','Agu','Sep','Okt','Nov','Des'
   ];
 
-  // 🔥 mapping data
+  //  mapping data
   const result = siswa.map(s => {
     let row = {
       Nama: s.nama,
