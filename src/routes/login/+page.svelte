@@ -100,6 +100,7 @@
 
 </div>
 <style>
+
 .container {
   display: flex;
   height: 90vh;               
@@ -113,9 +114,13 @@
   box-shadow: 0 20px 60px rgba(0,0,0,0.2);
 }
 
+.wrapper {
+  display: flex;
+}
+
 /* ===== LEFT ===== */
 .left {
-  flex: 1;
+  flex: 1.2;
   background: #f8fafc;
 
   display: flex;
@@ -157,9 +162,6 @@
   display: flex;
   justify-content: center;
   align-items: center;
-
-  border-top-left-radius: 60px;
-  border-bottom-left-radius: 60px;
 }
 
 /* konten kanan */
